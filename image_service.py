@@ -1,4 +1,10 @@
-"""Validated requests to the pinned OpenAI image model."""
+"""Validated requests to the pinned OpenAI image model.
+
+Responsible for input/output validation and the exact request shape sent to
+OpenAI; must not touch local storage (see gallery_store.py) or Streamlit
+session state (see streamlit_app.py). Read gallery_store.py next to see how
+a Result from generate() becomes a persisted Turn.
+"""
 
 import base64
 import binascii
@@ -87,6 +93,9 @@ def read_picture(data: bytes, *, mask: bool = False) -> Picture:
                 if getattr(image, "n_frames", 1) != 1:
                     raise ValueError("Use a still image, not an animated image.")
                 image.load()
+                # getextrema()[0] is the minimum alpha value across the whole
+                # image; it must be 0, i.e. at least one pixel is fully
+                # transparent, or the API has nothing to edit.
                 if mask and (
                     fmt != "png"
                     or "A" not in image.getbands()
@@ -164,6 +173,10 @@ async def generate(
 ) -> Result:
     """Call the exact snapshot once using a client scoped to this event loop."""
     settings.validate()
+    # Re-run build_prompt's non-empty/length checks on the already-assembled
+    # prompt; the returned string is intentionally discarded because the
+    # caller (not this function) is responsible for merging conversation
+    # history into `prompt` before calling generate().
     build_prompt(prompt, [])
     if len(references) > 16:
         raise ValueError("At most 16 reference images are allowed, including the current image.")
@@ -175,6 +188,9 @@ async def generate(
             references[0].height,
         ):
             raise ValueError("The mask must match the first image's dimensions.")
+        # The edit API pairs the mask with the base image positionally and
+        # requires the base to be PNG when a mask is supplied; re-encode
+        # regardless of the base's original upload format.
         with Image.open(BytesIO(references[0].data)) as image:
             buffer = BytesIO()
             image.save(buffer, format="PNG")
@@ -189,6 +205,9 @@ async def generate(
         max_retries=0,
         timeout=600.0,
     ) as client:
+        # openai.omit tells the SDK to drop this field from the request body
+        # entirely, rather than sending an explicit null; the API rejects a
+        # compression value for PNG output, which has no lossy compression.
         compression = settings.compression if settings.output_format != "png" else openai.omit
         if references:
             response = await client.images.edit(

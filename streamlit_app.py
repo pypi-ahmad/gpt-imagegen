@@ -1,4 +1,11 @@
-"""Local image generation, conversational edits, and saved gallery."""
+"""Local image generation, conversational edits, and saved gallery.
+
+Responsible for the UI and per-tab request state machine; must not be the
+source of truth for saved data — st.session_state is ephemeral per browser
+tab and is rebuilt from gallery_store.py (DATA_DIR) on every fresh session.
+Read gallery_store.py next for the on-disk turn format, then image_service.py
+for what a generation request actually sends.
+"""
 
 import asyncio
 import math
@@ -33,7 +40,12 @@ from image_service import (
 
 @st.cache_data(ttl=5, max_entries=4)
 def gallery_index(root: str) -> tuple[list[Turn], int]:
-    """Cache only local metadata, never paid generation requests."""
+    """Cache only local metadata, never paid generation requests.
+
+    Streamlit reruns this whole script on every widget interaction, so the
+    short TTL avoids re-scanning the gallery directory on each rerun while
+    still picking up turns saved moments ago.
+    """
     return list_turns(Path(root))
 
 
@@ -93,6 +105,9 @@ def show_image(turn: Turn, index: int, *, context: str, busy: bool) -> None:
 
 
 st.set_page_config(page_title="Image studio", page_icon=":material/palette:", layout="wide")
+# request_status walks None -> "queued" -> "running" -> None across reruns
+# (see the bottom of this file) so a page reload mid-request is detected as
+# interrupted rather than silently replayed against the paid API.
 for state_key, initial in {
     "active_id": None,
     "active_image": 0,

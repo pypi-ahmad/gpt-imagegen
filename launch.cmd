@@ -1,4 +1,8 @@
 @echo off
+REM Windows launcher: sync the locked env, force-free port 8507 (killing any
+REM process there, unrelated apps included — see README), then run the app.
+REM Must not require admin rights or touch ports other than 8507. Next file
+REM to read: streamlit_app.py.
 setlocal
 cd /d "%~dp0"
 if errorlevel 1 goto :failed
@@ -13,6 +17,9 @@ echo Preparing the locked Python environment...
 call uv sync --locked
 if errorlevel 1 goto :failed
 
+REM Re-checks the listener list after each Stop-Process (a PID can respawn
+REM on the same port) and polls up to 5s for the port to actually clear
+REM before giving up, since Stop-Process returns before the OS releases it.
 echo Clearing TCP port 8507. Any listening process will be stopped.
 powershell.exe -NoProfile -Command "$ErrorActionPreference = 'Stop'; try { $listeners = @(Get-NetTCPConnection -State Listen | Where-Object LocalPort -eq 8507); foreach ($owner in @($listeners.OwningProcess | Sort-Object -Unique)) { if ($null -eq $owner) { continue }; $current = @(Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -eq 8507 -and $_.OwningProcess -eq $owner }); if ($current.Count) { Write-Host ('Stopping PID ' + $owner); Stop-Process -Id $owner -Force -ErrorAction Stop } }; $deadline = [DateTime]::UtcNow.AddSeconds(5); do { $remaining = @(Get-NetTCPConnection -State Listen | Where-Object LocalPort -eq 8507); if (-not $remaining.Count) { exit 0 }; Start-Sleep -Milliseconds 200 } while ([DateTime]::UtcNow -lt $deadline); throw 'Port 8507 is still occupied.' } catch { Write-Host ('ERROR: Cannot clear port 8507. ' + $_.Exception.Message); exit 1 }"
 if errorlevel 1 goto :failed

@@ -1,4 +1,4 @@
-# Validation — 2026-09-09
+# Validation (2026-09-09)
 
 ## Automated checks
 
