@@ -1,4 +1,9 @@
-"""Explicit, paid end-to-end verification: generate, edit, then mask-edit."""
+"""Explicit, paid end-to-end verification: generate, edit, then mask-edit.
+
+Must not run automatically: unlike tests/, this hits the real OpenAI API and
+costs money, so it only executes behind the explicit --run flag. Read
+image_service.py for what each request actually sends.
+"""
 
 import argparse
 import asyncio

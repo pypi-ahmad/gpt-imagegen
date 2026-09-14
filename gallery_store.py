@@ -1,4 +1,11 @@
-"""Immutable local turn records, published only after all assets are saved."""
+"""Immutable local turn records, published only after all assets are saved.
+
+Responsible for on-disk persistence and path safety under DATA_DIR; must
+not call OpenAI or hold API credentials (see image_service.py) and must not
+render UI (see streamlit_app.py). Manifest data on disk is treated as
+untrusted: it can be hand-edited or corrupted outside the app, so load_turn
+re-validates every field before returning a Turn.
+"""
 
 import json
 import math
@@ -118,6 +125,7 @@ def list_turns(root: Path) -> tuple[list[Turn], int]:
     damaged = 0
     # ponytail: scan local manifests; add a SQLite index if gallery size makes this slow.
     for manifest in root.glob("*/turn.json"):
+        # Skips in-progress ".pending-*" staging dirs from save_turn().
         if manifest.parent.name.startswith("."):
             continue
         try:
@@ -148,10 +156,17 @@ def save_turn(root: Path, request: Request, result: Result) -> Turn:
     """Atomically publish a complete turn; retrying a local save is idempotent."""
     destination = turn_path(root, request.id)
     if destination.exists():
+        # Same request id already published (e.g. the UI retried after a
+        # save failure) — return the existing record instead of overwriting.
         return load_turn(root, request.id)
     if not result.images:
         raise ValueError("Cannot save an empty result.")
     root.mkdir(parents=True, exist_ok=True)
+    # Write every asset and the manifest into a private staging directory
+    # first, then rename() the whole directory into place as one atomic
+    # step. A crash or interrupted process mid-write leaves only an orphaned
+    # ".pending-*" staging dir under `root`, never a half-written turn
+    # directory that load_turn/list_turns would try to treat as valid.
     with tempfile.TemporaryDirectory(prefix=".pending-", dir=root) as temporary:
         staging = Path(temporary)
 
