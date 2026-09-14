@@ -1,0 +1,30 @@
+[project]
+name = "gpt-imagegen"
+version = "0.1.0"
+requires-python = ">=3.14.7"
+dependencies = [
+    "openai>=3.10.0",
+    "pillow>=12.3.0",
+    "streamlit>=1.63.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.6",
+    "ty>=0.0.79",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--cov=image_service --cov=gallery_store --cov-report=term-missing --cov-fail-under=91"

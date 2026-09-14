@@ -1,0 +1,11 @@
+.venv/
+data/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.env*
+.streamlit/secrets.toml
+.codegraph/
+.code-review-graph/
